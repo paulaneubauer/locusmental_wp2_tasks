@@ -1,0 +1,62 @@
+{
+  "python_env": {
+    "venv_path": "C:/Users/Paula_Neubauer/Desktop/locusmental_wp2_tasks/battery_venv/Scripts/python.exe"
+  },
+  "task_base_path": "C:/Users/Paula_Neubauer/Desktop/locusmental_wp2_tasks",
+  "task_paths": {
+    "dot_probe": "tasks/dotprobe_task/dotprobe_task_v5.py",
+    "go_nogo": "tasks/gonogo_task/gonogo_task_v5_tidy.py"
+  },
+  "constants": {
+    "monitor": {
+      "name": "MAG 274QRFW",
+      "width": 2560,
+      "height": 1440,
+      "distance_cm": 60,
+      "width_cm": 59.5
+    },
+    "audio": {
+      "device": "Realtek HD Audio 2nd output (Realtek(R) Audio)",
+      "latency_mode": 3,
+      "Lib": "ptb"
+    },
+    "eyetracker": {
+      "testmode": true,
+      "sampling_rate": 60,
+      "device": "Tobii Pro Spark"
+    },
+    "psychopy_window": {
+      "fullscreen": true,
+      "background_color": [0, 0, 0],
+      "size_fixation_cross_in_pixels": 90
+    },
+    "presentation_screen": 0,
+    "dialog_screen": 1
+  },
+  "tasks": {
+    "dot_probe": {
+      "logging": {
+        "base_path": "tasks/dotprobe_task/data",
+        "log_folder": "logging_data"
+      },
+      "data_paths": {
+        "trials": "tasks/dotprobe_task/data/trials",
+        "eyetracking": "tasks/dotprobe_task/data/eyetracking"
+      }
+    },
+    "go_nogo": {
+      "logging": {
+        "base_path": "tasks/gonogo_task/data",
+        "log_folder": "logging_data"
+      },
+      "data_paths": {
+        "trials": "tasks/gonogo_task/data/trials",
+        "eyetracking": "tasks/gonogo_task/data/eyetracking"
+      },
+      "response": {
+        "key_go": "return"
+      }
+    }
+  }
+}
+

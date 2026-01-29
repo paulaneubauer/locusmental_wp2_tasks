@@ -3,6 +3,11 @@
     "venv_path": "C:/Users/Paula_Neubauer/Desktop/locusmental_wp2_tasks/battery_venv/Scripts/python.exe"
   },
   "task_base_path": "C:/Users/Paula_Neubauer/Desktop/locusmental_wp2_tasks",
+
+  "media": {
+    "faces": "media"
+  },
+
   "task_paths": {
     "dot_probe": "tasks/dotprobe_task/dotprobe_task_v5.py",
     "go_nogo": "tasks/gonogo_task/gonogo_task_v5_tidy.py"

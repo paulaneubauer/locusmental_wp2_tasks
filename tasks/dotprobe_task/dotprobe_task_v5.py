@@ -2,10 +2,10 @@
 Passive Dot Probe Task 
 -----------------------------------------------------
 - Fixation: 500 ms (gaze-contingent)
-- Face pair: 500-1250 ms (colored rectangles as placeholders)
+- Face pair: 500-1250 ms 
 - Probe (dot): 1100 ms
 - Intertrial interval (blank): 750–1250 ms
-- Conditions: angry–neutral and happy–neutral
+- Conditions: angry–neutral and happy–neutral (optional filler neutral neutral)
 - Congruent = probe appears on same side as emotional face
 - Uses mouse as fake eye-tracker (move mouse cursor to simulate gaze) when testmode is True
 """
@@ -31,8 +31,12 @@ import sys
 from pylsl import StreamInfo, StreamOutlet
 
 #Load config file 
-with open("tasks/dotprobe_task/config_dotprobe.json", "r") as file:
+with open("tasks/config.json", "r") as file: 
     config = json.load(file)
+
+# media paths
+base_path = Path(config["task_base_path"])
+faces_path = base_path / config["media"]["faces"]
 
 # select logging 
 task_name = "dot_probe"
@@ -123,16 +127,18 @@ info = StreamInfo(
 )
 outlet = StreamOutlet(info)
 
+# CONSTANTS 
 # Experimental settings
 dialog_screen = config["constants"]["dialog_screen"]
 presentation_screen = config["constants"]["presentation_screen"]
 current_screen = presentation_screen
 number_of_trials = 64
 fixation_duration_in_seconds = 0.5
-stimulus_duration_in_seconds = 0.5
+stimulus_duration_in_seconds = 0.5 ###??? what stimulus
 probe_duration_in_seconds = 1.1
 ISI_interval = [0.75, 1.25]  # seconds
 gaze_offset_cutoff = 3 * size_fixation_cross_in_pixels
+baseline_duration = 5
 no_data_warning_cutoff = 0.5
 settings = {}
 
@@ -162,21 +168,18 @@ mywin = visual.Window(
 refresh_rate = mywin.monitorFramePeriod
 print('monitor refresh rate: ' + str(round(refresh_rate, 4)) + ' seconds')
 
-# Define placeholder face stimuli (replace with images later)
-face_placeholder = {
-    "angry": visual.Rect(win=mywin, width=150, height=200, fillColor='red', lineColor='black'),
-    "happy": visual.Rect(win=mywin, width=150, height=200, fillColor='green', lineColor='black'),
-    "neutral": visual.Rect(win=mywin, width=150, height=200, fillColor='grey', lineColor='black')
-}
+# Face size
+face_size = (600, 770)
 
 # Define Areas of Interest (AOIs) based on image positions and sizes
 # AOI settings
 show_AOIs = False # set to false for real data collection
 
-stim_x_offset = 200
+stim_x_offset = 500
 stim_y = 0
-aoi_width = 150
-aoi_height = 200
+aoi_margin = 50 
+aoi_width = face_size[0] + aoi_margin # 600 + 50 = 650
+aoi_height = face_size[1] + aoi_margin 
 
 AOI_left = visual.Rect(
     win=mywin,
@@ -256,60 +259,62 @@ def analyze_gaze_for_trial(gaze_data, AOI_left, AOI_right, stim_start, stim_end,
 # we now randomize which side the emotional face appears on and set congruency accordingly
 # 64 crizical trials (32 angry-neutral and 32 happy-neutral)
 # + optional 16-neutral filler trials (not analysed)
+# Build trials
+models = ["01F", "18F", "36M", "40M"]
 conditions = ["angry-neutral", "happy-neutral"]
 n_per_condition = 32
-n_congruent = n_per_condition // 2
-n_incongruent = n_per_condition // 2
-n_fillers = 16  # optional filler trials (25% of total)
-stim_durations = [0.5, 1.25]  # seconds
-
-include_fillers = False 
+n_per_model = n_per_condition // len(models)  # = 8
+n_fillers = 16
+stim_durations = [0.5, 1.25]
 
 trials = []
-
-# Build critical (emotional) trials
-emotion_color_map = {
-    "angry": [1, -1, -1],
-    "happy": [-1, 1, -1],
-    "neutral": [0.5, 0.5, 0.5]
-}
 
 for cond in conditions:
     emo_label = "angry" if cond == "angry-neutral" else "happy"
 
-    for congruency in ["congruent", "incongruent"]:
-        for i in range(n_congruent if congruency == "congruent" else n_incongruent):
-            emo_side = random.choice(["left", "right"])
-            stim_duration = random.choice(stim_durations)
-            probe_side = emo_side if congruency == "congruent" else ("left" if emo_side == "right" else "right")
+    model_list = models * n_per_model
+    random.shuffle(model_list)
 
-            trial = {
-                "condition": cond,
-                "emo_side": emo_side,
-                "congruency": congruency,
-                "probe_side": probe_side,
-                "stim_duration": stim_duration,
-                "emo_label": emo_label,
-                "filler": False
-            }
-            trials.append(trial)
+    congruencies = (["congruent"] * (n_per_condition // 2) +
+                    ["incongruent"] * (n_per_condition // 2))
+    random.shuffle(congruencies)
 
-# Optional Filler trials
-for i in range(n_fillers):
-    stim_duration = random.choice(stim_durations)
-    probe_side = random.choice(["left", "right"])
-    trial = {
+    emo_sides = (["left"] * (n_per_condition // 2) +
+                 ["right"] * (n_per_condition // 2))
+    random.shuffle(emo_sides)
+
+    for model, congruency, emo_side in zip(model_list, congruencies, emo_sides):
+        stim_duration = random.choice(stim_durations)
+
+        probe_side = (
+            emo_side if congruency == "congruent"
+            else ("left" if emo_side == "right" else "right")
+        )
+
+        trials.append({
+            "condition": cond,
+            "model": model,
+            "emo_label": emo_label,
+            "emo_side": emo_side,
+            "congruency": congruency,
+            "probe_side": probe_side,
+            "stim_duration": stim_duration,
+            "filler": False
+        })
+
+# Neutral–neutral fillers
+for _ in range(n_fillers):
+    trials.append({
         "condition": "neutral-neutral",
+        "model": random.choice(models),
+        "emo_label": "neutral",
         "emo_side": "none",
         "congruency": "NA",
-        "probe_side": probe_side,
-        "stim_duration": stim_duration,
-        "emo_label": "neutral",
+        "probe_side": random.choice(["left", "right"]),
+        "stim_duration": random.choice(stim_durations),
         "filler": True
-    }
-    trials.append(trial)
+    })
 
-# Randomize trial order
 random.shuffle(trials)
 number_of_trials = len(trials)
 
@@ -547,17 +552,26 @@ def fixcross_gazecontingent(duration_in_seconds, background_color = background_c
             print('warning: no eyes detected')
             logging.warning(' NO EYES DETECTED')
             frameN = 1 # reset duration of for loop - resart ISI
+            
             nodata_current_duration = 0
+            while check_nodata(gaze_position):
+                nodata_current_duration
+                draw_gazedirect(background_color) #redirect attention to fixation cross area
+                mywin.flip()  # Wait for monitor refresh time
+                nodata_duration += refresh_rate
+                nodata_current_duration += refresh_rate
+                gaze_position = tracker.getPosition()  # Get new gaze data
 
             while check_nodata(gaze_position):
                 mywin.flip() #wait for monitor refresh time
                 nodata_duration += refresh_rate
                 nodata_current_duration += refresh_rate
                 gaze_position = tracker.getPosition() #get new gaze data
+
         # Check for gaze:
         elif check_gaze_offset(gaze_position):
             print('warning: gaze offset')
-            frameN = 1 #reset duration of for loop - resart ISI
+            frameN = 1 #reset duration of for loop - restart ISI
 
             while not check_nodata(gaze_position) and check_gaze_offset(gaze_position):
                 # Listen for keypress:
@@ -566,6 +580,7 @@ def fixcross_gazecontingent(duration_in_seconds, background_color = background_c
                 mywin.flip() #wait for monitor refresh time
                 gaze_offset_duration += refresh_rate
                 gaze_position = tracker.getPosition() #get new gaze data
+                
         # Draw fixation cross:
         draw_fixcross(background_color, cross_color)
         mywin.flip()
@@ -589,159 +604,141 @@ def fixcross_gazecontingent(duration_in_seconds, background_color = background_c
     return [actual_fixcross_duration, gaze_offset_duration, pause_duration, nodata_duration]
 
 # Interstimulus interval
-def run_ISI(duration_in_seconds, background_color=background_color_rgb, cross_color='black'):
+def run_ISI(duration_in_seconds,
+            background_color=background_color_rgb,
+            cross_color='black'):
     """
-    Run an ISI interval with fixation cross on grey background (gaze-contingent).
-    Same logic as fixcross_gazecontingent() but uses a variable ISI duration.
+    Run gaze-contingent ISI using the same fixation logic as baseline.
     """
-    number_of_frames = round(duration_in_seconds / refresh_rate)
-    isi_start_time = core.getTime()
-    gaze_offset_duration = 0
-    pause_duration = 0
-    nodata_duration = 0
+    isi_start = core.getTime()
 
-    for frameN in range(number_of_frames):
-        # check for keypress
-        pause_duration += check_keypress()
-        # get gaze position
-        gaze_position = tracker.getPosition()
-
-        # if no gaze data
-        while check_nodata(gaze_position):
-            mywin.flip()
-            nodata_duration += refresh_rate
-            gaze_position = tracker.getPosition()
-
-        # if gaze offset
-        while check_gaze_offset(gaze_position):
-            draw_gazedirect(background_color)
-            mywin.flip()
-            gaze_offset_duration += refresh_rate
-            gaze_position = tracker.getPosition()
-
-        # draw fixation cross on grey background
-        draw_fixcross(background_color, cross_color)
-        mywin.flip()
-
-    isi_end_time = core.getTime()
-    isi_actual_duration = round(isi_end_time - isi_start_time, 3)
-
-    return (
-        isi_actual_duration,
-        round(isi_start_time, 3),
-        round(isi_end_time, 3),
-        round(gaze_offset_duration, 3),
-        round(pause_duration, 3),
-        round(nodata_duration, 3)
+    (
+        actual_duration,
+        gaze_offset_duration,
+        pause_duration,
+        nodata_duration
+    ) = fixcross_gazecontingent(
+        duration_in_seconds,
+        background_color=background_color,
+        cross_color=cross_color
     )
 
-def monitor_gaze_and_overlay():
-    gaze_position = tracker.getPosition()
+    isi_end = core.getTime()
 
-    if check_nodata(gaze_position):
-        draw_gazedirect()  # draw on top of cartoon
-        logging.warning('NO EYES DETECTED')
+    return (
+        actual_duration,
+        round(isi_start, 3),
+        round(isi_end, 3),
+        gaze_offset_duration,
+        pause_duration,
+        nodata_duration
+    )
 
-    elif check_gaze_offset(gaze_position):
-        draw_gazedirect()  # draw on top of cartoon
-        logging.warning('GAZE OFFSET')
-   
-# stimulus:       
+# build image paths
+emotion_code = {
+    "angry": "AN",
+    "happy": "HA",
+    "neutral": "NE"
+}
+
+def get_face_image(model, emotion):
+    """
+    Returns the full path to a face image.
+    Example: 01F_AN_C.BMP
+    """
+    filename = f"{model}_{emotion_code[emotion]}_C.BMP"
+    return faces_path / filename
+
+def make_face_stim(model, emotion, pos):
+    return visual.ImageStim(
+        win=mywin,
+        image=str(get_face_image(model, emotion)),
+        size=face_size,
+        pos=pos
+    )
+
 def present_dotprobe_stimulus(trial, collect_gaze=True):
     """
     Show face pair and probe in correct order, collect gaze samples.
     """
-    stim_x_offset = 200
+    stim_x_offset = 500
     stim_y = 0
 
-    # Determine emotion label from condition
-    if trial['condition'] == "angry-neutral":
-        emo_label = "angry"
-    elif trial['condition'] == "happy-neutral":
-        emo_label = "happy"
-    else:  # neutral-neutral filler
-        emo_label = "neutral"
+    model = trial["model"]
+    emo_label = trial["emo_label"]
+    emo_side = trial["emo_side"]
 
-    # Set left/right faces
-    if trial['emo_side'] == "left":
-        left_face = visual.Rect(
-            win=mywin, width=150, height=200,
-            fillColor=emotion_color_map[emo_label],
-            lineColor='black', pos=[-stim_x_offset, stim_y]
-        )
-        right_face = visual.Rect(
-            win=mywin, width=150, height=200,
-            fillColor=emotion_color_map["neutral"],
-            lineColor='black', pos=[stim_x_offset, stim_y]
-        )
-    elif trial['emo_side'] == "right":
-        left_face = visual.Rect(
-            win=mywin, width=150, height=200,
-            fillColor=emotion_color_map["neutral"],
-            lineColor='black', pos=[-stim_x_offset, stim_y]
-        )
-        right_face = visual.Rect(
-            win=mywin, width=150, height=200,
-            fillColor=emotion_color_map[emo_label],
-            lineColor='black', pos=[stim_x_offset, stim_y]
-        )
-    else:  # filler trial
-        left_face = visual.Rect(
-            win=mywin, width=150, height=200,
-            fillColor=emotion_color_map["neutral"],
-            lineColor='black', pos=[-stim_x_offset, stim_y]
-        )
-        right_face = visual.Rect(
-            win=mywin, width=150, height=200,
-            fillColor=emotion_color_map["neutral"],
-            lineColor='black', pos=[stim_x_offset, stim_y]
-        )
+    # --- Create face stimuli ---
+    if emo_side == "left":
+        left_face = make_face_stim(model, emo_label, [-stim_x_offset, stim_y])
+        right_face = make_face_stim(model, "neutral", [stim_x_offset, stim_y])
+
+    elif emo_side == "right":
+        left_face = make_face_stim(model, "neutral", [-stim_x_offset, stim_y])
+        right_face = make_face_stim(model, emo_label, [stim_x_offset, stim_y])
+
+    else:  # neutral-neutral filler
+        left_face = make_face_stim(model, "neutral", [-stim_x_offset, stim_y])
+        right_face = make_face_stim(model, "neutral", [stim_x_offset, stim_y])
 
     gaze_samples = []
 
     # --- Phase 1: Face pair ---
     stim_start = core.getTime()
     face_clock = core.Clock()
-    while face_clock.getTime() < trial['stim_duration']:
+
+    while face_clock.getTime() < trial["stim_duration"]:
         left_face.draw()
         right_face.draw()
         draw_AOIs_if_enabled()
 
         if collect_gaze and tracker:
-            try:
-                pos = tracker.getPosition()
-                if pos is not None:
-                    gaze_samples.append((core.getTime(), pos[0], pos[1]))
-            except Exception:
-                pass
+            pos = tracker.getPosition()
+            if pos is not None:
+                gaze_samples.append((core.getTime(), pos[0], pos[1]))
+
         mywin.flip()
 
-    # --- Phase 2: Brief clear ---
+    # --- Phase 2: Brief blank --- 
     mywin.flip(clearBuffer=True)
     core.wait(0.05)
 
     # --- Phase 3: Probe ---
-    probe_pos = [-stim_x_offset, stim_y] if trial['probe_side'] == 'left' else [stim_x_offset, stim_y]
-    probe_stim = visual.Circle(win=mywin, radius=15, fillColor='black', lineColor='black', pos=probe_pos)
+    probe_pos = (
+        [-stim_x_offset, stim_y]
+        if trial["probe_side"] == "left"
+        else [stim_x_offset, stim_y]
+    )
+
+    probe_stim = visual.Circle(
+        win=mywin,
+        radius=15,
+        fillColor="black",
+        lineColor="black",
+        pos=probe_pos
+    )
 
     probe_onset = core.getTime()
     probe_clock = core.Clock()
+
     while probe_clock.getTime() < probe_duration_in_seconds:
         probe_stim.draw()
         draw_AOIs_if_enabled()
 
         if collect_gaze and tracker:
-            try:
-                pos = tracker.getPosition()
-                if pos is not None:
-                    gaze_samples.append((core.getTime(), pos[0], pos[1]))
-            except Exception:
-                pass
+            pos = tracker.getPosition()
+            if pos is not None:
+                gaze_samples.append((core.getTime(), pos[0], pos[1]))
+
         mywin.flip()
 
     stim_end = core.getTime()
     total_duration = round(stim_end - stim_start, 3)
-    logging.info(f"STIMULUS DURATION: {total_duration}s (start={stim_start}, end={stim_end})")
+
+    logging.info(
+        f"STIMULUS DURATION: {total_duration}s "
+        f"(start={stim_start}, end={stim_end})"
+    )
 
     return total_duration, stim_start, stim_end, probe_onset, gaze_samples
 
@@ -793,7 +790,7 @@ try:
         logging.info(f'NEW TRIAL {trial_counter} - {trial["condition"]}')
         send_trigger([str(trial_counter), trial['condition'], str(timestamp_exp)])
 
-         # --- Console + log display of trial info ---
+        # --- Console + log display of trial info ---
         print(f"\n=== Trial {trial_counter}/{number_of_trials} ===")
         print(f"Condition: {trial['condition']}")
         print(f"Congruency: {trial['congruency']}")

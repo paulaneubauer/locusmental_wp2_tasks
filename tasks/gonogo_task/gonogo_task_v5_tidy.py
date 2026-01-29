@@ -485,7 +485,7 @@ def fixcross_gazecontingent(duration_in_seconds, background_color = background_c
         if check_nodata(gaze_position):
             print('warning: no eyes detected')
             logging.warning(' NO EYES DETECTED')
-            frameN = 1 # reset duration of for loop - resart ISI (CHECK THIS PAULA!)
+            frameN = 1 # reset duration of for loop - resart ISI 
             nodata_current_duration = 0
 
             while check_nodata(gaze_position):
@@ -726,8 +726,8 @@ send_trigger(['experiment_start', 'go_nogo', str(start_time)])
 for phase in phase_handler:
 
     if phase == 'baseline':
-        print(f'START OF BASELINE {baseline_trial_counter}')
-        logging.info(f'START OF BASELINE {baseline_trial_counter}')
+        print(f'Start of baseline {baseline_trial_counter}')
+        logging.info(f'Start of baseline {baseline_trial_counter}')
         timestamp = time.time()
         timestamp_exp = core.getTime()
         timestamp_tracker = tracker.trackerTime()
@@ -755,8 +755,8 @@ for phase in phase_handler:
 
         baseline_trial_counter += 1
 
-        print('END OF BASELINE')
-        logging.info('END OF BASELINE.')
+        print('end of baseline')
+        logging.info('end of baseline.')
         exp.nextEntry()
 
     elif phase == 'practice':
@@ -771,8 +771,8 @@ for phase in phase_handler:
         )
         practice_trials = data.TrialHandler(practice_trial_list, nReps=1, method='random')
         exp.addLoop(practice_trials)  # link practice trials to phase
-        print('START OF PRACTICE TRIALS')
-        logging.info(' START OF PRACTICE TRIALS.')
+        print('start of practice trials')
+        logging.info(' start of practice trials.')
 
         for trial in practice_trials:
             practice_trial_counter += 1
@@ -783,8 +783,16 @@ for phase in phase_handler:
             timestamp_exp = core.getTime()
             timestamp_tracker = tracker.trackerTime()
 
-            # --- print Trial Info ---
-            print(f"Practice Trial{practice_trial_counter} ({trial_type.upper()})")
+            # --- Console + log display of trial info ---
+            print(f"\n=== Practice Trial {practice_trial_counter}/{N_PRACTICE_TRIALS} ===")
+            print(f"Trial type: {trial_type.upper()}")
+            print(f"Stimulus duration: {stimulus_duration_in_seconds} s")
+            print(f"ISI: {ISI} s")
+
+            logging.info(f"=== Practice Trial {practice_trial_counter}/{N_PRACTICE_TRIALS} ===")
+            logging.info(f"Trial type: {trial_type.upper()}")
+            logging.info(f"Stimulus duration: {stimulus_duration_in_seconds} s")
+            logging.info(f"ISI: {ISI} s")
 
             # Practice Trail Start trigger
             send_trigger([f'practice_trial_{practice_trial_counter}', trial_type, str(timestamp_exp)])
@@ -862,13 +870,18 @@ for phase in phase_handler:
             # Increment counter at start
             trial_counter += 1
 
-            # print trial info
-            print(f"Trial {trial_counter} ({trial_type.upper()})")
-            logging.info(' NEW TRIAL')
-            print('ISI:', ISI)
-            logging.info(f' ISI: {ISI}')
-            print('gaze position:', tracker.getPosition()) 
-            logging.info(f' GAZE POSITION: {tracker.getPosition()}')
+            # --- Console + log display of trial info ---
+            print(f"\n=== Trial {trial_counter}/{N_GO + N_NOGO} ===")
+            print(f"Trial type: {trial_type.upper()}")
+            print(f"Stimulus duration: {stimulus_duration_in_seconds} s")
+            print(f"ISI: {ISI} s")
+            print(f"Gaze position: {tracker.getPosition()}")
+
+            logging.info(f"=== Trial {trial_counter}/{N_GO + N_NOGO}")
+            logging.info(f"Trial type: {trial_type.upper()}")
+            logging.info(f"Stimulus duration (planned): {stimulus_duration_in_seconds} s")
+            logging.info(f"ISI: {ISI} s")
+            logging.info(f"Gaze position: {tracker.getPosition()}")
 
             # Send trial start trigger
             send_trigger([str(trial_counter), trial_type, str(core.getTime())])

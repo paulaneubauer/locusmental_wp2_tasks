@@ -183,8 +183,9 @@ go_triangle = visual.ShapeStim(
     win=mywin,
     vertices=[(-0.5, -0.4), (0.5, -0.4), (0, 0.6)],
     size=triangle_size,
-    fillColor='#00FF00',
-    lineColor='#00FF00',
+    fillColor=None,                
+    lineColor=[0, 0.4, 0.6],  
+    lineWidth=4,
     units='pix'
 )
 
@@ -192,8 +193,9 @@ nogo_triangle = visual.ShapeStim(
     win=mywin,
     vertices=[(-0.5, 0.4), (0.5, 0.4), (0, -0.6)],
     size=triangle_size,
-    fillColor='#00FF00',
-    lineColor='#00FF00',
+    fillColor=None,               
+    lineColor=[0, 0.4, 0.6],
+    lineWidth=4,
     units='pix'
 )
 
@@ -202,16 +204,16 @@ stimulus_half_size = triangle_size / 2
 # Create feedback stimuli (robust Unicode)
 correct_feedback = visual.TextStim(
     win=mywin,
-    text='☺',   # or ':)'
+    text='☺',          # or ':)'
     height=280,
-    color='green'
+    color=(0, 131, 0)
 )
 
 incorrect_feedback = visual.TextStim(
     win=mywin,
-    text='☹',   # or ':('
+    text='☹',          # or ':('
     height=280,
-    color='red'
+    color=(255, 0, 0)
 )
 
 #Setup Eye Tracking:

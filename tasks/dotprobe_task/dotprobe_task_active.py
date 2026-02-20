@@ -2,7 +2,7 @@
 Active Dot Probe Task 
 -----------------------------------------------------
 - Fixation: 500 ms (gaze-contingent)
-- Face pair: 500-1250 ms 
+- Face pair: 1250 ms 
 - Probe (dot): 1100 ms
 - Intertrial interval (blank): 750–1250 ms
 - Conditions: angry–neutral and happy–neutral (optional filler neutral neutral)
@@ -133,7 +133,7 @@ dialog_screen = config["constants"]["dialog_screen"]
 presentation_screen = config["constants"]["presentation_screen"]
 current_screen = presentation_screen
 fixation_duration_in_seconds = 0.5
-stimulus_duration_in_seconds = 0.5 
+#stimulus_duration_in_seconds = 0.5 # not used
 probe_duration_in_seconds = 1.1
 ISI_interval = [0.75, 1.25]  # seconds
 gaze_offset_cutoff = 3 * size_fixation_cross_in_pixels
@@ -172,7 +172,7 @@ face_size = (600, 770)
 
 # Define Areas of Interest (AOIs) based on image and asterisks positions and sizes
 # AOI settings
-show_AOIs = False # set to false for real data collection
+show_AOIs = True # set to false for real data collection
 
 stim_x_offset = 500
 stim_y = 0
@@ -202,17 +202,50 @@ AOI_right = visual.Rect(
     opacity=0.5
 )
 
-def draw_AOIs_if_enabled():
-    """Draw AOI rectalnges if visualization is enabled."""
+# Probe AOIs (smaller, dot-centered)
+probe_radius = size_fixation_cross_in_pixels
+
+probe_AOI_left = visual.Circle(
+    win=mywin,
+    radius=probe_radius,
+    pos=[-stim_x_offset, stim_y],
+    lineColor='green',
+    fillColor=None,
+    opacity=0.5
+)
+
+probe_AOI_right = visual.Circle(
+    win=mywin,
+    radius=probe_radius,
+    pos=[stim_x_offset, stim_y],
+    lineColor='red',
+    fillColor=None,
+    opacity=0.5
+)
+
+
+def draw_face_AOIs():
     if show_AOIs:
         AOI_left.draw()
         AOI_right.draw()
 
+def draw_probe_AOI(probe_side):
+    if show_AOIs:
+        if probe_side == "left":
+            probe_AOI_left.draw()
+        else:
+            probe_AOI_right.draw()
+        
 def point_in_aoi(gaze_x, gaze_y, aoi):
     """Check whether a gaze sample (x, y) is inside a given AOI."""
     left, right = aoi.pos[0] - aoi.width / 2, aoi.pos[0] + aoi.width / 2
     bottom, top = aoi.pos[1] - aoi.height / 2, aoi.pos[1] + aoi.height / 2
     return left <= gaze_x <= right and bottom <= gaze_y <= top
+
+def point_in_circle(x, y, circle):
+    dx = x - circle.pos[0]
+    dy = y - circle.pos[1]
+    return (dx**2 + dy**2) <= circle.radius**2
 
 def analyze_gaze_for_trial(gaze_data, AOI_left, AOI_right, stim_start, stim_end, probe_onset=None, probe_pos=None):
     """
@@ -222,7 +255,8 @@ def analyze_gaze_for_trial(gaze_data, AOI_left, AOI_right, stim_start, stim_end,
       - latency to fixate probe AOI (if probe_onset provided)
     gaze_data: list of (timestamp, x, y)
     """
-    gaze_samples = [g for g in gaze_data if stim_start <= g[0] <= stim_end] # stim_end here is face_end because face_end is passed at the stim_end argument, only gaze samples collected between stim_start and face_end are consider
+    # face period
+    face_samples = [g for g in gaze_data if stim_start <= g[0] <= stim_end] # stim_end here is face_end because face_end is passed at the stim_end argument, only gaze samples collected between stim_start and face_end are consider
 
     dwell_left, dwell_right = 0, 0
     first_fixation_side = None
@@ -230,7 +264,7 @@ def analyze_gaze_for_trial(gaze_data, AOI_left, AOI_right, stim_start, stim_end,
 
     sample_rate = 1 / sampling_rate  # use your ET sampling rate (from config)
 
-    for t, x, y in gaze_samples:
+    for t, x, y in face_samples:
         in_left = point_in_aoi(x, y, AOI_left)
         in_right = point_in_aoi(x, y, AOI_right)
 
@@ -245,12 +279,24 @@ def analyze_gaze_for_trial(gaze_data, AOI_left, AOI_right, stim_start, stim_end,
         elif in_right:
             dwell_right += sample_rate
 
-        # probe fixation latency
-        if probe_onset and probe_fixation_latency is None:
-            if (probe_pos == "left" and in_left) or (probe_pos == "right" and in_right):
-                probe_fixation_latency = t - probe_onset
-
     dwell_bias = dwell_right - dwell_left  # positive = right bias
+
+    # Probe latency
+    probe_fixation_latency = None
+
+    if probe_onset is not None:
+        probe_samples = [g for g in gaze_data if g[0] >= probe_onset]
+
+        for t, x, y in probe_samples:
+            if probe_pos == "left":
+                in_probe = point_in_circle(x, y, probe_AOI_left)
+            else:
+                in_probe = point_in_circle(x, y, probe_AOI_right)
+
+            if in_probe:
+                probe_fixation_latency = t - probe_onset
+                break # first fixation only
+
     return first_fixation_side, dwell_left, dwell_right, dwell_bias, probe_fixation_latency
 
 # Build trials
@@ -263,7 +309,7 @@ conditions = ["angry-neutral", "happy-neutral"]
 n_per_condition = 32
 n_per_model = n_per_condition // len(models)  # = 8
 n_fillers = 16
-stim_durations = [0.5]
+stim_durations = [1.25]
 
 trials = []
 
@@ -692,7 +738,7 @@ def present_dotprobe_stimulus(trial, collect_gaze=True):
     while face_clock.getTime() < trial["stim_duration"]:
         left_face.draw()
         right_face.draw()
-        draw_AOIs_if_enabled()
+        draw_face_AOIs()
 
         if collect_gaze and tracker:
             pos = tracker.getPosition()
@@ -705,7 +751,7 @@ def present_dotprobe_stimulus(trial, collect_gaze=True):
 
     # --- Phase 2: Brief blank --- 
     #mywin.flip(clearBuffer=True)
-    core.wait(0.05)
+    #core.wait(0.05)
 
     # --- Phase 3: Probe (LEFT / RIGHT RESPONSE) ---
     probe_pos = (
@@ -733,7 +779,7 @@ def present_dotprobe_stimulus(trial, collect_gaze=True):
 
     while response_clock.getTime() < probe_duration_in_seconds:
         probe_stim.draw()
-        draw_AOIs_if_enabled()
+        draw_probe_AOI(trial["probe_side"])
 
         # gaze logging
         if collect_gaze and tracker:

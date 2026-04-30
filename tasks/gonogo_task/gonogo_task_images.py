@@ -666,7 +666,7 @@ def present_stimulus(stimulus_duration_in_seconds, trial, trial_number):
     fixation_start_time = None
     last_time = stim_clock.getTime()
 
-    onset_trigger_sent = False  
+    # onset_trigger_sent = False  # removed when trigger structure was updated
 
     while stim_clock.getTime() < stimulus_duration_in_seconds:
         pause_duration = check_keypress()
@@ -716,12 +716,6 @@ def present_stimulus(stimulus_duration_in_seconds, trial, trial_number):
 
         # flip once per frame 
         mywin.flip()
-
-        # Stimulus onset trigger: fires once, on the first flip
-        if not onset_trigger_sent:
-            stim_onset_time = core.getTime()
-            send_trigger([str(trial_number), trial + '_stimulus', str(stim_onset_time)])
-            onset_trigger_sent = True
  
         # Response handling 
         keys = kb.getKeys([GO_KEY], waitRelease=False)
@@ -855,8 +849,10 @@ for phase in phase_handler:
                     # Format: [str(practice_trial_counter), 'go'/'nogo', timestamp]
                     send_trigger([str(practice_trial_counter), trial_type, str(core.getTime())])
 
-                    # Stimulus presentation — stimulus onset + response triggers
-                    # are sent from inside present_stimulus()
+                    # Stimulus onset trigger
+                    stim_onset_time = core.getTime()
+                    send_trigger([str(practice_trial_counter), trial_type + '_stimulus', str(stim_onset_time)])
+
                     stimulus_duration, stim_start, stim_end = present_stimulus(
                         stimulus_duration_in_seconds, trial_type, practice_trial_counter
                     )
@@ -905,6 +901,7 @@ for phase in phase_handler:
                     practice_trials.addData('stimulus_duration', stimulus_duration)
                     practice_trials.addData('stimulus_start_time', stim_start)
                     practice_trials.addData('stimulus_end_time', stim_end)
+                    practice_trials.addData('stim_onset_trigger_time', stim_onset_time)
 
                     exp.nextEntry()
 
@@ -1020,13 +1017,17 @@ for phase in phase_handler:
             # Format: [str(trial_counter), 'go'/'nogo', timestamp]
             send_trigger([str(trial_counter), trial_type, str(core.getTime())])
 
-            # Stimulus presentation — stimulus onset + response triggers
-            # are sent from inside present_stimulus()
+            # Stimulus onset trigger
+            stim_onset_time = core.getTime()
+            send_trigger([str(trial_counter), trial_type + '_stimulus', str(stim_onset_time)])
+
+
             stimulus_duration, stim_start, stim_end = present_stimulus(
                 stimulus_duration_in_seconds, trial_type, trial_counter
             )
 
-            # send response trigger if Go key is pressed
+            # send response trigger if Go key is pressed 
+            # now sent from within present_stimulus
             # if present_stimulus.response:
                 # send_trigger([trial_type + '_response', 'main', str(core.getTime())])
 
@@ -1067,6 +1068,7 @@ for phase in phase_handler:
             trials.addData('stimulus_duration', stimulus_duration)
             trials.addData('stimulus_start_time', stim_start)
             trials.addData('stimulus_end_time', stim_end)
+            trials.addData('stim_onset_trigger_time', stim_onset_time)
 
             exp.nextEntry()
 

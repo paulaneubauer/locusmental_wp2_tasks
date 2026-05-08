@@ -1,18 +1,20 @@
 """
-Active Dot Probe Task 
+Dot Probe Task 
 -----------------------------------------------------
 - Fixation: 500 ms (gaze-contingent)
 - Face pair: 1250 ms 
 - Probe (dot): 1100 ms
 - Intertrial interval (blank): 750–1250 ms
-- Conditions: angry–neutral and happy–neutral (optional filler neutral neutral)
+- Conditions: angry–neutral and happy–neutral (+ filler neutral neutral)
 - Congruent = probe appears on same side as emotional face
 - Uses mouse as fake eye-tracker (move mouse cursor to simulate gaze) when testmode is True
+- (stim_duration = planned duration; stimulus_duration = actual stimulus duration)
 """
 
 # LOAD MODULES-
 import os
 import random
+import itertools
 import csv
 import time
 import numpy 
@@ -26,9 +28,6 @@ import logging
 from datetime import datetime
 import json
 import sys
-
-# send trigger via LSL
-from pylsl import StreamInfo, StreamOutlet
 
 #Load config file 
 with open("tasks/config.json", "r") as file: 
@@ -116,17 +115,6 @@ eyetracking_data_folder.mkdir(parents=True, exist_ok=True)
 print(f"THIS IS {task_name.upper()}")
 logging.info(f"THIS IS {task_name.upper()}")
 
-#Create the LSL stream
-info = StreamInfo(
-    name='Markers',           # Stream name (must match what you select in LabRecorder)
-    type='Markers',           # Stream type (must match in LabRecorder)
-    channel_count=3,          # 1 for simple triggers
-    nominal_srate=0,          # Irregular sampling rate for event markers
-    channel_format='string',  # Markers are usually strings
-    source_id='stimulus_stream'  # Unique ID for your experiment/session
-)
-outlet = StreamOutlet(info)
-
 # CONSTANTS 
 # Experimental settings
 dialog_screen = config["constants"]["dialog_screen"]
@@ -172,7 +160,7 @@ face_size = (600, 770)
 
 # Define Areas of Interest (AOIs) based on image and asterisks positions and sizes
 # AOI settings
-show_AOIs = True # set to false for real data collection
+show_AOIs = False # set to false for real data collection
 
 stim_x_offset = 500
 stim_y = 0
@@ -223,7 +211,6 @@ probe_AOI_right = visual.Circle(
     opacity=0.5
 )
 
-
 def draw_face_AOIs():
     if show_AOIs:
         AOI_left.draw()
@@ -250,38 +237,39 @@ def point_in_circle(x, y, circle):
 def analyze_gaze_for_trial(gaze_data, AOI_left, AOI_right, stim_start, stim_end, probe_onset=None, probe_pos=None):
     """
     Compute gaze-based attention bias metrics:
-      - initial fixation side (angry or neutral)
-      - dwell time per AOI
-      - latency to fixate probe AOI (if probe_onset provided)
+      - initial fixation side (emotional or neutral)
+      - dwell time per AOI, accumulated at refresh_rate per sample
+        (consistent with fixcross_gazecontingent and run_ISI)
+      - latency to first fixation on probe AOI (if probe_onset provided)
     gaze_data: list of (timestamp, x, y)
     """
-    # face period
-    face_samples = [g for g in gaze_data if stim_start <= g[0] <= stim_end] # stim_end here is face_end because face_end is passed at the stim_end argument, only gaze samples collected between stim_start and face_end are consider
+    # --- Face period samples only ---
+    face_samples = [g for g in gaze_data if stim_start <= g[0] <= stim_end]
 
-    dwell_left, dwell_right = 0, 0
+    dwell_left, dwell_right = 0.0, 0.0
     first_fixation_side = None
-    probe_fixation_latency = None
-
-    sample_rate = 1 / sampling_rate  # use your ET sampling rate (from config)
 
     for t, x, y in face_samples:
-        in_left = point_in_aoi(x, y, AOI_left)
+        in_left  = point_in_aoi(x, y, AOI_left)
         in_right = point_in_aoi(x, y, AOI_right)
 
+        # First fixation side
         if first_fixation_side is None:
             if in_left:
                 first_fixation_side = "left"
             elif in_right:
                 first_fixation_side = "right"
 
+        # Each sample spans one frame — consistent with refresh_rate-based
+        # accumulation used elsewhere in the task (fixcross_gazecontingent, run_ISI)
         if in_left:
-            dwell_left += sample_rate
+            dwell_left += refresh_rate
         elif in_right:
-            dwell_right += sample_rate
+            dwell_right += refresh_rate
 
     dwell_bias = dwell_right - dwell_left  # positive = right bias
 
-    # Probe latency
+    # --- Probe fixation latency ---
     probe_fixation_latency = None
 
     if probe_onset is not None:
@@ -295,72 +283,106 @@ def analyze_gaze_for_trial(gaze_data, AOI_left, AOI_right, stim_start, stim_end,
 
             if in_probe:
                 probe_fixation_latency = t - probe_onset
-                break # first fixation only
+                break  # first fixation only
 
     return first_fixation_side, dwell_left, dwell_right, dwell_bias, probe_fixation_latency
 
+
 # Build trials
 # we now randomize which side the emotional face appears on and set congruency accordingly
-# 64 crizical trials (32 angry-neutral and 32 happy-neutral)
-# + optional 16-neutral filler trials (not analysed)
+# 32 critical trials (16 angry-neutral and 16 happy-neutral)
+# + optional 8-neutral filler trials (not analysed)
 # Build trials
+# -----------------------------
+# SETTINGS
+# -----------------------------
+
 models = ["01F", "18F", "36M", "40M"]
+
 conditions = ["angry-neutral", "happy-neutral"]
-n_per_condition = 32
-n_per_model = n_per_condition // len(models)  # = 8
-n_fillers = 16
-stim_durations = [1.25]
+
+emo_sides = ["left", "right"]
+
+congruencies = ["congruent", "incongruent"]
+
+stim_duration = 1.25 # planned duration 
+
+n_fillers = 8
 
 trials = []
 
-for cond in conditions:
-    emo_label = "angry" if cond == "angry-neutral" else "happy"
+# -----------------------------
+# CRITICAL TRIALS
+# 4 x 2 x 2 x 2 = 32
+# -----------------------------
 
-    model_list = models * n_per_model
-    random.shuffle(model_list)
+critical_design = list(itertools.product(
+    models,
+    conditions,
+    emo_sides,
+    congruencies
+))
 
-    congruencies = (["congruent"] * (n_per_condition // 2) +
-                    ["incongruent"] * (n_per_condition // 2))
-    random.shuffle(congruencies)
+for model, condition, emo_side, congruency in critical_design:
 
-    emo_sides = (["left"] * (n_per_condition // 2) +
-                 ["right"] * (n_per_condition // 2))
-    random.shuffle(emo_sides)
+    if condition == "angry-neutral":
+        emo_label = "angry"
+    else:
+        emo_label = "happy"
 
-    for model, congruency, emo_side in zip(model_list, congruencies, emo_sides):
-        stim_duration = random.choice(stim_durations)
+    # Probe location depends on congruency
+    if congruency == "congruent":
+        probe_side = emo_side
+    else:
+        probe_side = "right" if emo_side == "left" else "left"
 
-        probe_side = (
-            emo_side if congruency == "congruent"
-            else ("left" if emo_side == "right" else "right")
-        )
+    trial = {
+        "trial_type": "critical",
+        "model": model,
+        "condition": condition,
+        "emo_label": emo_label,
+        "emo_side": emo_side,
+        "congruency": congruency,
+        "probe_side": probe_side,
+        "stim_duration": stim_duration
+    }
 
-        trials.append({
-            "condition": cond,
-            "model": model,
-            "emo_label": emo_label,
-            "emo_side": emo_side,
-            "congruency": congruency,
-            "probe_side": probe_side,
-            "stim_duration": stim_duration,
-            "filler": False
-        })
+    trials.append(trial)
 
-# Neutral–neutral fillers
-for _ in range(n_fillers):
-    trials.append({
+# -----------------------------
+# FILLER TRIALS
+# neutral-neutral
+# -----------------------------
+
+# each model appears twice
+filler_models = models * 2
+
+for model in filler_models:
+
+    probe_side = random.choice(["left", "right"])
+
+    trial = {
+        "trial_type": "filler",
+        "model": model,
         "condition": "neutral-neutral",
-        "model": random.choice(models),
         "emo_label": "neutral",
-        "emo_side": "none",
-        "congruency": "NA",
-        "probe_side": random.choice(["left", "right"]),
-        "stim_duration": random.choice(stim_durations),
-        "filler": True
-    })
+        "emo_side": None,
+        "congruency": None,
+        "probe_side": probe_side,
+        "stim_duration": stim_duration
+    }
+
+    trials.append(trial)
+
+# -----------------------------
+# FINAL RANDOMIZATION
+# -----------------------------
 
 random.shuffle(trials)
-number_of_trials = len(trials) #80
+
+# total trials
+number_of_trials = len(trials)
+print(len(trials))  # 40
 
 #Setup Eye Tracking:
 if testmode_et:
@@ -423,10 +445,6 @@ left_key = 'left'
 right_key = 'right'
 response_keys = [left_key, right_key]
 
-# send trigger (marker) function
-def send_trigger(marker):
-    # marker must be a list of strings, length = channel_count
-    outlet.push_sample(marker)
 
 # Draw a fixation cross from lines:
 def draw_fixcross(background_color=background_color_rgb, cross_color='black'):
@@ -538,7 +556,7 @@ def check_keypress():
     key_names = [key.name for key in keys]
     #print(f"Keys pressed: {key_names}")  # Debug: print the key names
 
-    if 'escape' in keys:
+    if 'escape' in key_names:
         dlg = gui.Dlg(title='Quit?', labelButtonOK=' OK ', labelButtonCancel=' Cancel ')
         dlg.addText('Do you really want to quit? - Then press OK')
         dlg.screen = dialog_screen
@@ -551,7 +569,7 @@ def check_keypress():
             current_screen = presentation_screen
         pause_time = clock.getTime() - timestamp_keypress
 
-    elif 'p' in keys:
+    elif 'p' in key_names:
         dlg = gui.Dlg(title='Pause', labelButtonOK='Continue')
         dlg.addText('Experiment is paused - Press Continue, when ready')
         dlg.screen = dialog_screen
@@ -738,6 +756,10 @@ def present_dotprobe_stimulus(trial, collect_gaze=True):
     while face_clock.getTime() < trial["stim_duration"]:
         left_face.draw()
         right_face.draw()
+
+        # fixation cross stays visible during stimulus presentation
+        draw_fixcross()
+
         draw_face_AOIs()
 
         if collect_gaze and tracker:
@@ -769,9 +791,10 @@ def present_dotprobe_stimulus(trial, collect_gaze=True):
         pos=probe_pos
     )
 
+    kb.clearEvents()
+
     probe_onset = core.getTime()
     response_clock = core.Clock()
-    kb.clearEvents()
 
     response = None
     rt = None
@@ -793,6 +816,8 @@ def present_dotprobe_stimulus(trial, collect_gaze=True):
             response = keys[0].name
             rt = response_clock.getTime()
 
+            # kb.clearEvents
+
             # accuracy coding
             if (response == left_key and trial["probe_side"] == "left") or \
                (response == right_key and trial["probe_side"] == "right"):
@@ -811,17 +836,15 @@ def present_dotprobe_stimulus(trial, collect_gaze=True):
 
 
 # EXPERIMENTAL DESIGN 
-# 64 critical trials (32 angry-neutral, 32 happy-neutral)
-# + optional 16 neutral-neutral filler trials (not analysed)
+# 32 critical trials (16 angry-neutral, 16 happy-neutral)
+# +  8 neutral-neutral filler trials (not analysed)
 start_time = core.getTime()
-send_trigger(['start', 'dot_probe', str(start_time)])
 trial_counter = 0
 
 # phase 0 baseline fixation cross (before trials)
 def show_baseline_fixation():
     print("Displaying Baseline Fixation Cross for 5 seconds.")
     timestamp_exp = core.getTime()
-    send_trigger(['0', 'baseline', str(timestamp_exp)])  # baseline trigger
     # Display fixation cross for 5 seconds
     fixcross_gazecontingent(5.0)
     logging.info("Baseline fixation cross displayed for 5 seconds")
@@ -829,7 +852,7 @@ def show_baseline_fixation():
 show_baseline_fixation()  # <-- call it here
 
 # --- Setup TrialHandler ---
-trials_handler = data.TrialHandler(trialList=trials, nReps=1, method='random')
+trials_handler = data.TrialHandler(trialList=trials, nReps=1, method='sequential') # was random beofre, but since we shuffle earlier we would be randomizing twice
 exp.addLoop(trials_handler)
 
 # Add AOI metric fields once (not inside the loop)
@@ -860,7 +883,6 @@ try:
             timestamp_tracker = None
 
         logging.info(f'NEW TRIAL {trial_counter} - {trial["condition"]}')
-        send_trigger([str(trial_counter), trial['condition'], str(timestamp_exp)])
 
         # --- Console + log display of trial info ---
         print(f"\n=== Trial {trial_counter}/{number_of_trials} ===")
@@ -917,7 +939,12 @@ try:
         trials_handler.addData('response_correct', correct)
 
         # --- Store RTs for bias calculation (only correct angry trials) ---
-        if correct == 1 and not trial['filler'] and trial['emo_label'] == 'angry' and rt is not None:
+        if (
+            correct == 1
+            and trial['trial_type'] == 'critical'
+            and trial['emo_label'] == 'angry'
+            and rt is not None
+        ):
             if trial['congruency'] == 'congruent':
                 rt_congruent_angry.append(rt)
             elif trial['congruency'] == 'incongruent':
@@ -956,7 +983,7 @@ try:
 
         # Trial info
         trials_handler.addData('stimulus_duration_used', trial['stim_duration'])
-        trials_handler.addData('filler', trial['filler'])
+        trials_handler.addData('filler', trial['trial_type'] == 'filler')
 
         # AOI gaze metrics
         trials_handler.addData('initial_fixation_side', first_fixation_side)
@@ -971,7 +998,6 @@ try:
 finally:
     # --- End of task cleanup ---
     end_time = core.getTime()
-    send_trigger(['end', 'dot_probe', str(end_time)])
     logging.info(f"DOT PROBE TASK ENDED — Total duration: {end_time - start_time:.2f} seconds")
     print(f"DOT PROBE TASK ENDED — Total duration: {end_time - start_time:.2f} seconds")
 
@@ -982,6 +1008,12 @@ finally:
             io.quit()
     except Exception as e:
         logging.warning(f"Error during shutdown: {e}")
+
+    try:
+        exp.saveAsWideText(str(trials_data_folder / f"{fileName}.csv"))
+        print("Trials data saved successfully.")
+    except Exception as e:
+        print("Error saving trials data:", e)
 
     mywin.close()
     core.quit()

@@ -1,4 +1,16 @@
-'''Go-NoGo TASK'''
+"""
+Go-NoGo Task
+- Baseline: 5 s fixation cross (gaze-contingent)
+- Stimulus: 1300 ms (go image or nogo image, gaze-contingent)
+- ISI: 700–1200 ms fixation cross (gaze-contingent)
+- Conditions: go (60%) and nogo (40%)
+- Hit = go trial with response, Miss = go trial without response
+- Correct rejection = nogo trial without response, False alarm = nogo trial with response
+- Practice block: 3 phases (go-only → mostly go → mixed), with performance criterion (65%)
+  and up to 2 repeats of phases 2+3 if criterion not met; feedback shown after each practice trial
+- Main block: 200 trials, 2-minute break at trial 100
+- Uses mouse as fake eye-tracker (move mouse cursor to simulate gaze) when testmode is True
+"""
 
 # ================================
 # IMPORTS
@@ -22,7 +34,7 @@ import sys
 #send trigger via LSL
 from pylsl import StreamInfo, StreamOutlet
 
-# Suppress pygame and LSL messages (???)
+# Suppress pygame and LSL messages 
 import os # 
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 os.environ["LSL_LOG_LEVEL"] = "fatal" # removes messages in CMD
@@ -79,8 +91,7 @@ background_color_rgb = config["constants"]["psychopy_window"]["background_color"
 size_fixation_cross_in_pixels = config["constants"]["psychopy_window"]["size_fixation_cross_in_pixels"]
 
 # Create the LSL Stream
-# 3-channel string markers [trial_number_or_event, condition_or_label, timestamp]
-# matches the auditory oddball convention
+# 3-channel string markers 
 info = StreamInfo(
     name='Markers',           # Stream name (must match what you select in LabRecorder)
     type='Markers',           # Stream type (must match in LabRecorder)
@@ -315,13 +326,6 @@ def gaze_on_stimulus(gaze):
 
 #Send a trigger (marker) function
 def send_trigger(marker):
-    """Push a 3-element string marker to the LSL outlet.
-    
-    Convention (matching auditory oddball):
-        marker[0] = trial number (as str) OR event label for non-trial events
-        marker[1] = condition / event subtype (e.g. 'go', 'nogo', 'baseline_start')
-        marker[2] = timestamp from core.getTime() as str
-    """
     # marker must be a list of strings, length = channel_count
     outlet.push_sample(marker)
 
@@ -847,11 +851,11 @@ for phase in phase_handler:
 
                     # Practice trial onset trigger
                     # Format: [str(practice_trial_counter), 'go'/'nogo', timestamp]
-                    send_trigger([str(practice_trial_counter), trial_type, str(core.getTime())])
+                    # send_trigger([str(practice_trial_counter), trial_type, str(core.getTime())])
 
                     # Stimulus onset trigger
                     stim_onset_time = core.getTime()
-                    send_trigger([str(practice_trial_counter), trial_type + '_stimulus', str(stim_onset_time)])
+                    send_trigger([str(practice_trial_counter), trial_type + '_onset', str(stim_onset_time)])
 
                     stimulus_duration, stim_start, stim_end = present_stimulus(
                         stimulus_duration_in_seconds, trial_type, practice_trial_counter
@@ -875,29 +879,35 @@ for phase in phase_handler:
 
                     # Practice trial end trigger
                     # Format: [str(practice_trial_counter), 'trial_end', timestamp]
-                    send_trigger([str(practice_trial_counter), 'trial_end', str(core.getTime())])
+                    #send_trigger([str(practice_trial_counter), 'trial_end', str(core.getTime())])
 
                     isi_duration, isi_start, isi_end, gaze_offset_duration, pause_duration, nodata_duration = run_gazecontingent_ISI(ISI)
 
                     phase_handler.addData('phase', phase)
                     practice_trials.addData('trial_counter', practice_trial_counter)
                     practice_trials.addData('trial', trial_type)
+
                     practice_trials.addData('timestamp', timestamp)
                     practice_trials.addData('timestamp_exp', timestamp_exp)
                     practice_trials.addData('timestamp_tracker', timestamp_tracker)
+
                     practice_trials.addData('accuracy', present_stimulus.accuracy)
                     practice_trials.addData('response', present_stimulus.response)
                     practice_trials.addData('rt', present_stimulus.response_rt)
                     practice_trials.addData('response_timestamp', present_stimulus.response_timestamp)
+
                     practice_trials.addData('fixation_latency', present_stimulus.fixation_latency)
                     practice_trials.addData('dwell_time', present_stimulus.dwell_time)
+
                     practice_trials.addData('ISI_expected', ISI)
                     practice_trials.addData('ISI_duration', isi_duration)
                     practice_trials.addData('ISI_start_time', isi_start)
                     practice_trials.addData('ISI_end_time', isi_end)
+
                     practice_trials.addData('gaze_offset_duration', gaze_offset_duration)
                     practice_trials.addData('trial_pause_duration', pause_duration)
                     practice_trials.addData('trial_nodata_duration', nodata_duration)
+
                     practice_trials.addData('stimulus_duration', stimulus_duration)
                     practice_trials.addData('stimulus_start_time', stim_start)
                     practice_trials.addData('stimulus_end_time', stim_end)
@@ -1015,12 +1025,11 @@ for phase in phase_handler:
 
             # Main trial onset trigger
             # Format: [str(trial_counter), 'go'/'nogo', timestamp]
-            send_trigger([str(trial_counter), trial_type, str(core.getTime())])
+            #send_trigger([str(trial_counter), trial_type, str(core.getTime())])
 
             # Stimulus onset trigger
             stim_onset_time = core.getTime()
-            send_trigger([str(trial_counter), trial_type + '_stimulus', str(stim_onset_time)])
-
+            send_trigger([str(trial_counter), trial_type + '_onset', str(stim_onset_time)])
 
             stimulus_duration, stim_start, stim_end = present_stimulus(
                 stimulus_duration_in_seconds, trial_type, trial_counter
@@ -1033,7 +1042,7 @@ for phase in phase_handler:
 
             # Main trial end trigger
             # Format: [str(trial_counter), 'trial_end', timestamp]
-            send_trigger([str(trial_counter), 'trial_end', str(core.getTime())])
+            # send_trigger([str(trial_counter), 'trial_end', str(core.getTime())])
 
             # Interstimulus interval
             isi_duration, isi_start, isi_end, gaze_offset_duration, pause_duration, nodata_duration = run_gazecontingent_ISI(ISI)

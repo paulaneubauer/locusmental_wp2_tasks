@@ -3,14 +3,13 @@
     "venv_path": "C:/Users/Paula_Neubauer/Desktop/locusmental_wp2_tasks/battery_venv/Scripts/python.exe"
   },
   "task_base_path": "C:/Users/Paula_Neubauer/Desktop/locusmental_wp2_tasks",
-
   "media": {
-    "faces": "media"
+    "faces": "media",
+    "go_nogo": "media/go_nogo"
   },
-
   "task_paths": {
-    "dot_probe": "tasks/dotprobe_task/dotprobe_task_v5.py",
-    "go_nogo": "tasks/gonogo_task/gonogo_task_v5_tidy.py"
+    "dot_probe": "tasks/dotprobe_task/dotprobe_task_active.py",
+    "go_nogo": "tasks/gonogo_task/gonogo_task_images.py"
   },
   "constants": {
     "monitor": {
@@ -32,7 +31,11 @@
     },
     "psychopy_window": {
       "fullscreen": true,
-      "background_color": [0, 0, 0],
+      "background_color": [
+        0,
+        0,
+        0
+      ],
       "size_fixation_cross_in_pixels": 90
     },
     "presentation_screen": 0,
@@ -59,9 +62,8 @@
         "eyetracking": "tasks/gonogo_task/data/eyetracking"
       },
       "response": {
-        "key_go": "return"
+        "key_go": "right"
       }
     }
   }
 }
-

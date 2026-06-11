@@ -894,6 +894,7 @@ try:
         trials_handler.addData('face_onset', face_onset)
         trials_handler.addData('face_offset', face_offset)
         trials_handler.addData('probe_onset', probe_onset)
+        trials_handler.addData('probe_offset', probe_offset)
         trials_handler.addData('face_duration_planned', trial['stim_duration'])
         trials_handler.addData('face_actual_duration', face_offset - face_onset)
         trials_handler.addData('probe_actual_duration', probe_offset - probe_onset)
@@ -910,7 +911,7 @@ try:
         # Trial info
         trials_handler.addData('filler', trial['trial_type'] == 'filler')
 
-        trials_handler.addData('trial_duration', isi_end - timestamp_exp)
+        trials_handler.addData('trial_duration', isi_end - face_onset)
  
         # AOI gaze metrics
         trials_handler.addData('initial_fixation_side', first_fixation_side)

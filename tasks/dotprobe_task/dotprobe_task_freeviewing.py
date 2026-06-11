@@ -297,7 +297,7 @@ def analyze_gaze_for_trial(gaze_data, AOI_left, AOI_right, face_onset, face_offs
 # SETTINGS
 # -----------------------------
  
-models = ["01F", "18F", "36M", "40M"]
+models = ["01F", "18F", "36M", "37M"]
  
 conditions = ["angry-neutral", "happy-neutral"]
  
@@ -860,7 +860,7 @@ try:
         logging.info(f"Stimulus duration: {trial['stim_duration']} s")
  
         # --- Phase 0: Fixation cross (gaze-contingent) ---
-        fix_durations = fixcross_gazecontingent(fixation_duration_in_seconds)
+        #fix_durations = fixcross_gazecontingent(fixation_duration_in_seconds)
  
         # --- Phase 1 & 2: Face pair + probe (free viewing) ---
         # Trial order: fixation → faces → probe → ISI
@@ -888,19 +888,15 @@ try:
         trials_handler.addData('timestamp', timestamp)
         trials_handler.addData('timestamp_exp', timestamp_exp)
         trials_handler.addData('timestamp_tracker', timestamp_tracker)
- 
-        # Fixation durations
-        trials_handler.addData('fix_actual_duration', fix_durations[0])
-        trials_handler.addData('fix_gaze_offset_duration', fix_durations[1])
-        trials_handler.addData('fix_pause_duration', fix_durations[2])
-        trials_handler.addData('fix_nodata_duration', fix_durations[3])
+
  
         # Face & probe timestamps
         trials_handler.addData('face_onset', face_onset)
         trials_handler.addData('face_offset', face_offset)
         trials_handler.addData('probe_onset', probe_onset)
-        trials_handler.addData('probe_offset', probe_offset)
-        trials_handler.addData('stimulus_duration_used', trial['stim_duration'])
+        trials_handler.addData('face_duration_planned', trial['stim_duration'])
+        trials_handler.addData('face_actual_duration', face_offset - face_onset)
+        trials_handler.addData('probe_actual_duration', probe_offset - probe_onset)
  
         # ISI
         trials_handler.addData('ISI_expected', ISI)
@@ -913,6 +909,8 @@ try:
  
         # Trial info
         trials_handler.addData('filler', trial['trial_type'] == 'filler')
+
+        trials_handler.addData('trial_duration', isi_end - timestamp_exp)
  
         # AOI gaze metrics
         trials_handler.addData('initial_fixation_side', first_fixation_side)
